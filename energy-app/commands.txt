@@ -1,0 +1,16 @@
+uvicorn auth_service.app:app --port 8001
+uvicorn user_service.app:app --port 8002
+uvicorn device_service.app:app --port 8003
+uvicorn gateway.app:app --port 8000
+
+$login = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/auth/login" `
+  -Method POST -ContentType "application/json" `
+  -Body '{"username":"admin","password":"admin123"}'
+
+$ADMIN_TOKEN = $login.access_token
+$ADMIN_HEADERS = @{ Authorization = "Bearer $ADMIN_TOKEN" }
+
+$dev = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/devices" `
+  -Method POST -Headers $ADMIN_HEADERS -ContentType "application/json" `
+  -Body '{"name":"device1","max_consumption":3.0}'
+$did = $dev.id

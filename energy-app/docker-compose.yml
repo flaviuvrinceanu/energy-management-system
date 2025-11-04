@@ -1,0 +1,109 @@
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.1
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --entrypoints.web.address=:80
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [net]
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    networks: [net]
+
+  auth:
+    build:
+      context: .
+      dockerfile: auth_service/Dockerfile
+    environment:
+      AUTH_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/energy_auth
+      USERS_URL: http://users:8002
+      DEVICES_URL: http://devices:8003
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_MIN: ${JWT_EXPIRES_MIN:-120}
+    depends_on: [db]
+    networks: [net]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.auth.rule=PathPrefix(`/auth`)
+      - traefik.http.routers.auth.entrypoints=web
+      - traefik.http.middlewares.auth-stripprefix.stripPrefix.prefixes=/auth
+      - traefik.http.routers.auth.middlewares=auth-stripprefix
+      - traefik.http.services.auth.loadbalancer.server.port=8001
+
+  users:
+    build:
+      context: .
+      dockerfile: user_service/Dockerfile
+    environment:
+      # set both for robustness
+      USERS_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/energy_users
+      DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/energy_users
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [net]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.userssvc.rule=PathPrefix(`/usersvc`)
+      - traefik.http.routers.userssvc.entrypoints=web
+      - traefik.http.services.userssvc.loadbalancer.server.port=8002
+
+  devices:
+    build:
+      context: .
+      dockerfile: device_service/Dockerfile
+    environment:
+      DEVICES_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/energy_devices
+    depends_on: [db]
+    networks: [net]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.devices.rule=PathPrefix(`/devicesvc`)
+      - traefik.http.routers.devices.entrypoints=web
+      - traefik.http.middlewares.devices-stripprefix.stripPrefix.prefixes=/devicesvc
+      - traefik.http.routers.devices.middlewares=devices-stripprefix
+      - traefik.http.services.devices.loadbalancer.server.port=8003
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    environment:
+      AUTH_URL: http://auth:8001
+      USERS_URL: http://users:8002
+      DEVICES_URL: http://devices:8003
+      JWT_SECRET: ${JWT_SECRET}
+    depends_on: [auth, users, devices]
+    networks: [net]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.gateway.rule=PathPrefix(`/api`)
+      - traefik.http.routers.gateway.entrypoints=web
+      - traefik.http.services.gateway.loadbalancer.server.port=8000
+
+volumes:
+  dbdata:
+
+networks:
+  net:
+    driver: bridge
