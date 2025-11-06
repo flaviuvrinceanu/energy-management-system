@@ -4,9 +4,13 @@ import httpx
 from fastapi import HTTPException
 from .dto import RegisterIn, LoginIn, TokenOut
 from .schemas import User, Role
+from pydantic import BaseModel
 
 USERS_SERVICE_URL = os.getenv("USERS_URL", "http://users:8002")
 DEVICES_SERVICE_URL = os.getenv("DEVICES_URL", "http://devices:8003")
+
+class UpdateUserIn(BaseModel):
+    username: str
 
 def init_routes(app, SessionLocal, pwd, make_token):
 
@@ -91,3 +95,30 @@ def init_routes(app, SessionLocal, pwd, make_token):
         call_with_retries("DELETE", f"{DEVICES_SERVICE_URL}/device-users/{user_id}")
 
         return {"status": "deleted", "id": user_id}
+
+    @app.put("/auth/users/{user_id}")
+    def update_user(user_id: str, payload: UpdateUserIn):
+        """Update username in Auth and sync copies."""
+        with SessionLocal() as db:
+            u = db.query(User).filter(User.id == user_id).first()
+            if not u:
+                raise HTTPException(status_code=404, detail="User not found")
+            # unique username
+            exists = db.query(User).filter(User.username == payload.username, User.id != user_id).first()
+            if exists:
+                raise HTTPException(status_code=409, detail="Username already exists")
+            u.username = payload.username
+            db.commit()
+            db.refresh(u)
+
+        body = {"id": str(u.id), "username": u.username, "role": u.role.value if hasattr(u.role, "value") else u.role}
+        try:
+            httpx.post(f"{USERS_SERVICE_URL}/users/sync", json=body, timeout=5.0)
+        except Exception:
+            pass
+        try:
+            httpx.post(f"{DEVICES_SERVICE_URL}/device-users", json=body, timeout=5.0)
+        except Exception:
+            pass
+
+        return body

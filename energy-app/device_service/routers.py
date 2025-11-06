@@ -1,6 +1,6 @@
 from fastapi import HTTPException, Header
 from typing import List, Optional
-from .dto import DeviceIn, DeviceOut, DeviceUserIn
+from .dto import DeviceIn, DeviceOut, DeviceUserIn, DeviceUpdateIn
 from .schemas import Device, DeviceUser
 
 def init_routes(app, SessionLocal):
@@ -58,7 +58,7 @@ def init_routes(app, SessionLocal):
             )
 
     @app.put("/devices/{device_id}")
-    def update_device(device_id: str, payload: DeviceIn, x_user_role: Optional[str] = Header(None)):
+    def update_device(device_id: str, payload: DeviceUpdateIn, x_user_role: Optional[str] = Header(None)) -> DeviceOut:
         """Update a device (admin only)"""
         if x_user_role != "admin":
             raise HTTPException(status_code=403, detail="Admin only")
@@ -67,17 +67,18 @@ def init_routes(app, SessionLocal):
             d = db.query(Device).filter(Device.id == device_id).first()
             if not d:
                 raise HTTPException(status_code=404, detail="Device not found")
-            d.name = payload.name
-            d.max_consumption = payload.max_consumption
-            d.device_user_id = payload.device_user_id
+            if payload.name is not None:
+                d.name = payload.name
+            if payload.max_consumption is not None:
+                d.max_consumption = payload.max_consumption
             db.commit()
             db.refresh(d)
-            return DeviceOut(
-                id=str(d.id),
-                name=d.name,
-                max_consumption=d.max_consumption,
-                device_user_id=str(d.device_user_id) if d.device_user_id else None
-            )
+            return {
+                "id": str(d.id),
+                "name": d.name,
+                "max_consumption": d.max_consumption,
+                "device_user_id": str(d.device_user_id) if d.device_user_id else None,
+            }
 
     @app.delete("/devices/{device_id}")
     def delete_device(device_id: str, x_user_role: Optional[str] = Header(None)):

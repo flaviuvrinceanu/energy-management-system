@@ -4,7 +4,10 @@ from typing import Literal
 class UserIn(BaseModel):
     username: str
     password: str
-    role: Literal["admin","client"] = "client"
+    role: str
+
+class UserUpdateIn(BaseModel):
+    username: str
 
 class UserOut(BaseModel):
     id: str

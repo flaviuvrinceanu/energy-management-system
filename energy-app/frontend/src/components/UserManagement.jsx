@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { getUsers, createUser, deleteUser } from '../services/api';
+import { getUsers, createUser, deleteUser, updateUser } from '../services/api';
 
 function UserManagement() {
   const [users, setUsers] = useState([]);
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'client' });
+  const [editingId, setEditingId] = useState(null);
+  const [editUsername, setEditUsername] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -13,8 +15,8 @@ function UserManagement() {
   const fetchUsers = async () => {
     try {
       const response = await getUsers();
-      console.log('Users response:', response.data); // Debug line
-      // Make sure we're setting an array
+      console.log('Users response:', response.data); 
+      
       setUsers(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       const errorMsg = err.response?.data?.detail || 'Failed to fetch users';
@@ -29,9 +31,9 @@ function UserManagement() {
     try {
       await createUser(newUser.username, newUser.password, newUser.role);
       setNewUser({ username: '', password: '', role: 'client' });
-      await fetchUsers(); // Wait for refresh
+      await fetchUsers(); 
     } catch (err) {
-      console.error('Create user error:', err.response?.data); // Debug line
+      console.error('Create user error:', err.response?.data); 
       if (err.response?.data?.detail && Array.isArray(err.response.data.detail)) {
         const errors = err.response.data.detail.map(e => `${e.loc.join('.')}: ${e.msg}`).join(', ');
         setError(errors);
@@ -40,6 +42,26 @@ function UserManagement() {
         setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
       }
     }
+  };
+
+  const handleEdit = (user) => {
+    setEditingId(user.id);
+    setEditUsername(user.username);
+  };
+
+  const handleUpdate = async (id) => {
+    try {
+      await updateUser(id, { username: editUsername });
+      setEditingId(null);
+      await fetchUsers();
+    } catch (err) {
+      setError('Failed to update user');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditUsername('');
   };
 
   const handleDelete = async (id) => {
@@ -100,12 +122,38 @@ function UserManagement() {
           {users.map((user) => (
             <tr key={user.id}>
               <td style={{ border: '1px solid #dee2e6', padding: '10px' }}>{user.id}</td>
-              <td style={{ border: '1px solid #dee2e6', padding: '10px' }}>{user.username}</td>
+              <td style={{ border: '1px solid #dee2e6', padding: '10px' }}>
+                {editingId === user.id ? (
+                  <input
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value)}
+                    style={{ padding: '5px', width: '90%' }}
+                  />
+                ) : (
+                  user.username
+                )}
+              </td>
               <td style={{ border: '1px solid #dee2e6', padding: '10px' }}>{user.role}</td>
               <td style={{ border: '1px solid #dee2e6', padding: '10px' }}>
-                <button onClick={() => handleDelete(user.id)} style={{ padding: '5px 15px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '3px' }}>
-                  Delete
-                </button>
+                {editingId === user.id ? (
+                  <>
+                    <button onClick={() => handleUpdate(user.id)} style={{ padding: '5px 15px', marginRight: '5px', background: '#28a745', color: 'white', border: 'none', borderRadius: '3px' }}>
+                      Save
+                    </button>
+                    <button onClick={handleCancelEdit} style={{ padding: '5px 15px', marginRight: '5px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '3px' }}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => handleEdit(user)} style={{ padding: '5px 15px', marginRight: '5px', background: '#ffc107', color: 'black', border: 'none', borderRadius: '3px' }}>
+                      Edit
+                    </button>
+                    <button onClick={() => handleDelete(user.id)} style={{ padding: '5px 15px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '3px' }}>
+                      Delete
+                    </button>
+                  </>
+                )}
               </td>
             </tr>
           ))}

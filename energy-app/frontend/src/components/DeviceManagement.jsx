@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getDevices, createDevice, deleteDevice, getUsers, assignDevice, createDeviceUser } from '../services/api';
+import { getDevices, createDevice, deleteDevice, updateDevice, getUsers, assignDevice, createDeviceUser } from '../services/api';
 
 function DeviceManagement() {
   const [devices, setDevices] = useState([]);
@@ -7,6 +7,9 @@ function DeviceManagement() {
   const [name, setName] = useState('');
   const [maxConsumption, setMaxConsumption] = useState('');
   const [selectedUser, setSelectedUser] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editConsumption, setEditConsumption] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -48,7 +51,7 @@ function DeviceManagement() {
           try {
             await createDeviceUser({ id: user.id, username: user.username, role: user.role });
           } catch (err) {
-            // Device user might already exist
+            
           }
         }
       }
@@ -61,6 +64,28 @@ function DeviceManagement() {
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to create device');
     }
+  };
+
+  const handleEdit = (device) => {
+    setEditingId(device.id);
+    setEditName(device.name);
+    setEditConsumption(device.max_consumption);
+  };
+
+  const handleUpdate = async (id) => {
+    try {
+      await updateDevice(id, { name: editName, max_consumption: parseFloat(editConsumption) });
+      setEditingId(null);
+      loadDevices();
+    } catch (err) {
+      setError('Failed to update device');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditName('');
+    setEditConsumption('');
   };
 
   const handleDelete = async (id) => {
@@ -135,8 +160,30 @@ function DeviceManagement() {
           {devices.map((device) => (
             <tr key={device.id}>
               <td style={{ border: '1px solid #dee2e6', padding: '10px' }}>{device.id}</td>
-              <td style={{ border: '1px solid #dee2e6', padding: '10px' }}>{device.name}</td>
-              <td style={{ border: '1px solid #dee2e6', padding: '10px' }}>{device.max_consumption}</td>
+              <td style={{ border: '1px solid #dee2e6', padding: '10px' }}>
+                {editingId === device.id ? (
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    style={{ padding: '5px', width: '90%' }}
+                  />
+                ) : (
+                  device.name
+                )}
+              </td>
+              <td style={{ border: '1px solid #dee2e6', padding: '10px' }}>
+                {editingId === device.id ? (
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={editConsumption}
+                    onChange={(e) => setEditConsumption(e.target.value)}
+                    style={{ padding: '5px', width: '90%' }}
+                  />
+                ) : (
+                  device.max_consumption
+                )}
+              </td>
               <td style={{ border: '1px solid #dee2e6', padding: '10px' }}>
                 {device.device_user_id ? (
                   users.find(u => u.id === device.device_user_id)?.username || device.device_user_id
@@ -145,21 +192,37 @@ function DeviceManagement() {
                 )}
               </td>
               <td style={{ border: '1px solid #dee2e6', padding: '10px' }}>
-                <select
-                  onChange={(e) => e.target.value && handleAssign(device.id, e.target.value)}
-                  style={{ marginRight: '10px', padding: '5px' }}
-                  defaultValue=""
-                >
-                  <option value="">Assign to...</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.username}
-                    </option>
-                  ))}
-                </select>
-                <button onClick={() => handleDelete(device.id)} style={{ padding: '5px 15px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '3px' }}>
-                  Delete
-                </button>
+                {editingId === device.id ? (
+                  <>
+                    <button onClick={() => handleUpdate(device.id)} style={{ padding: '5px 15px', marginRight: '5px', background: '#28a745', color: 'white', border: 'none', borderRadius: '3px' }}>
+                      Save
+                    </button>
+                    <button onClick={handleCancelEdit} style={{ padding: '5px 15px', marginRight: '5px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '3px' }}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button onClick={() => handleEdit(device)} style={{ padding: '5px 15px', marginRight: '5px', background: '#ffc107', color: 'black', border: 'none', borderRadius: '3px' }}>
+                      Edit
+                    </button>
+                    <select
+                      onChange={(e) => e.target.value && handleAssign(device.id, e.target.value)}
+                      style={{ marginRight: '10px', padding: '5px' }}
+                      defaultValue=""
+                    >
+                      <option value="">Assign to...</option>
+                      {users.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.username}
+                        </option>
+                      ))}
+                    </select>
+                    <button onClick={() => handleDelete(device.id)} style={{ padding: '5px 15px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '3px' }}>
+                      Delete
+                    </button>
+                  </>
+                )}
               </td>
             </tr>
           ))}

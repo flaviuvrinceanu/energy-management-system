@@ -17,7 +17,7 @@ function Register() {
       await register(username, password, role);
       navigate('/login');
     } catch (err) {
-      // FIX: Extract error message properly
+      
       const errorMsg = err.response?.data?.detail || 
                      err.response?.data?.message || 
                      'Registration failed';

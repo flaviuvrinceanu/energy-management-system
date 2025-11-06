@@ -25,14 +25,16 @@ export const login = (username, password) =>
 // Users
 export const getUsers = () => api.get('/users');
 export const createUser = (username, password, role) =>
-  api.post('/users', { username, password, role });  // Make sure it matches UserIn DTO
+  api.post('/users', { username, password, role });  
 export const deleteUser = (id) => api.delete(`/users/${id}`);
+export const updateUser = (userId, data) => api.put(`/users/${userId}`, data);
 
 // Devices
 export const getDevices = () => api.get('/devices');
 export const createDevice = (data) => api.post('/devices', data);
 export const deleteDevice = (id) => api.delete(`/devices/${id}`);
 export const assignDevice = (deviceId, userId) => api.post(`/devices/${deviceId}/assign/${userId}`);
+export const updateDevice = (deviceId, data) => api.put(`/devices/${deviceId}`, data);
 
 // My Devices
 export const getMyDevices = () => api.get('/devices/mine');

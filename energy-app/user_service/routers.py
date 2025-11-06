@@ -5,7 +5,7 @@ import os
 from .dto import *
 from .schemas import User, Role
 
-AUTH_SERVICE_URL = "http://auth:8001"
+AUTH_SERVICE_URL = os.getenv("AUTH_URL", "http://auth:8001")
 
 def require_admin(x_user_role: str | None = Header(default=None)):
     if x_user_role != "admin":
@@ -89,3 +89,27 @@ def init_routes(app, SessionLocal):
             db.query(User).filter(User.id == user_id).delete()
             db.commit()
         return {"status": "deleted"}
+
+    @app.put("/users/{user_id}")
+    def update_user(user_id: str, payload: UserUpdateIn, x_user_role: Optional[str] = Header(None)):
+        if x_user_role != "admin":
+            raise HTTPException(status_code=403, detail="Admin only")
+
+        resp = httpx.put(f"{AUTH_SERVICE_URL}/auth/users/{user_id}", json={"username": payload.username}, timeout=10.0)
+        if resp.status_code >= 400:
+            try:
+                detail = resp.json().get("detail")
+            except Exception:
+                detail = resp.text
+            raise HTTPException(status_code=resp.status_code, detail=detail)
+
+        user_json = resp.json()
+        with SessionLocal() as db:
+            existing = db.query(User).filter(User.id == user_json["id"]).first()
+            if existing:
+                existing.username = user_json["username"]
+                existing.role = Role(user_json["role"])
+            else:
+                db.add(User(id=user_json["id"], username=user_json["username"], role=Role(user_json["role"])))
+            db.commit()
+        return user_json

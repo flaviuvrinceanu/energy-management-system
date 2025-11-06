@@ -1,5 +1,14 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional
+
+class DeviceIn(BaseModel):
+    name: str
+    max_consumption: float
+    device_user_id: Optional[str] = None
+
+class DeviceUpdateIn(BaseModel):
+    name: Optional[str] = None
+    max_consumption: Optional[float] = None
 
 class DeviceUserIn(BaseModel):
     id: str
@@ -8,11 +17,6 @@ class DeviceUserIn(BaseModel):
 
 class DeviceUserOut(DeviceUserIn):
     id: str
-
-class DeviceIn(BaseModel):
-    name: str
-    max_consumption: float
-    device_user_id: Optional[str] = None
 
 class DeviceOut(DeviceIn):
     id: str
