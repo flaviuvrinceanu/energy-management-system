@@ -12,6 +12,6 @@ class Role(str, enum.Enum):
 
 class User(Base):
     __tablename__ = "users"
-    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    id: Mapped[str] = mapped_column(String, primary_key=True)  # Use string ID from auth
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    role: Mapped[Role] = mapped_column(Enum(Role), default=Role.client)
+    role: Mapped[Role] = mapped_column(Enum(Role))
