@@ -7,7 +7,7 @@ import httpx
 import jwt
 from typing import Optional
 
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key")
+JWT_SECRET = os.getenv("JWT_SECRET", "secret-key")
 AUTH_URL = os.getenv("AUTH_URL", "http://auth:8001")
 USERS_URL = os.getenv("USERS_URL", "http://users:8002")
 DEVICES_URL = os.getenv("DEVICES_URL", "http://devices:8003")

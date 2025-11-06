@@ -13,7 +13,7 @@ from auth_service.schemas import Base
 load_dotenv()
 
 DATABASE_URL = os.getenv("AUTH_DATABASE_URL") or os.getenv("DATABASE_URL") or "postgresql+psycopg://postgres:postgres@db:5432/energy_auth"
-JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key")
+JWT_SECRET = os.getenv("JWT_SECRET", "secret-key")
 JWT_EXPIRES_MIN = int(os.getenv("JWT_EXPIRES_MIN", "120"))
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
