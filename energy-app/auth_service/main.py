@@ -31,9 +31,8 @@ def make_token(user_id: str, username: str, role: str):
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
-app = FastAPI(title="Auth Service")  # Remove root_path="/auth"
+app = FastAPI(title="Auth Service")  
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost"],

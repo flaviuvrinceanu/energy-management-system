@@ -21,7 +21,7 @@ Base.metadata.create_all(engine)
 
 app = FastAPI(title="User Service", root_path="/usersvc")
 
-# Add CORS middleware
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost"],

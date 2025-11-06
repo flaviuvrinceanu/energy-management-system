@@ -14,7 +14,6 @@ DEVICES_URL = os.getenv("DEVICES_URL", "http://devices:8003")
 
 app = FastAPI(title="API Gateway")
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost"],
@@ -23,7 +22,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Map API paths to service URLs and path prefixes to strip
+
 TARGETS = {
     "/api/auth": (AUTH_URL, "/api"),
     "/api/users": (USERS_URL, "/api"),
@@ -35,10 +34,10 @@ def required_role(path: str, method: str):
     # Public
     if path.startswith("/api/auth"):
         return None
-    # Client can access their own devices
+    # Client
     if path == "/api/devices/mine" and method == "GET":
-        return "client"  # Allow both client and admin
-    # Admin only
+        return "client" 
+    # Admin
     if path.startswith("/api/users"):
         return "admin"
     if path.startswith("/api/devices"):
@@ -48,7 +47,7 @@ def required_role(path: str, method: str):
     return None
 
 def pick_target(path: str):
-    # Match longest prefix first
+    
     for prefix in sorted(TARGETS.keys(), key=len, reverse=True):
         if path.startswith(prefix):
             target_url, strip_prefix = TARGETS[prefix]
@@ -61,13 +60,13 @@ async def guard_and_proxy(request: Request, call_next):
     path = request.url.path
     method = request.method
     
-    print(f"Gateway received: {method} {path}")  # Debug log
+    print(f"Gateway received: {method} {path}")  
     
-    # Allow health checks and docs
+   
     if path == "/api/health" or path.startswith("/api/docs") or path == "/api/openapi.json":
         return await call_next(request)
     
-    # Allow OPTIONS requests without authentication (CORS preflight)
+    
     if method == "OPTIONS":
         proxied_url = pick_target(path)
         if not proxied_url:
@@ -90,7 +89,7 @@ async def guard_and_proxy(request: Request, call_next):
     user_id = None
     role = None
     
-    # If the endpoint requires authentication
+   
     if need is not None:
         auth = request.headers.get("Authorization", "")
         if not auth.startswith("Bearer "):
@@ -107,12 +106,12 @@ async def guard_and_proxy(request: Request, call_next):
             print(f"Invalid token: {e}")
             return JSONResponse({"detail":"Invalid token"}, status_code=401)
         
-        # Check if role matches requirement
+       
         if need == "admin" and role != "admin":
             print(f"Access denied: need admin, got {role}")
             return JSONResponse({"detail":"Forbidden"}, status_code=403)
         
-        # For client endpoints, allow both client and admin
+        
         if need == "client" and role not in ["client", "admin"]:
             print(f"Access denied: need client or admin, got {role}")
             return JSONResponse({"detail":"Forbidden"}, status_code=403)

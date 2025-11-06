@@ -1,10 +1,12 @@
-import os, httpx, jwt, datetime as dt
+import os
+import time
+import httpx
 from fastapi import HTTPException
 from .dto import RegisterIn, LoginIn, TokenOut
 from .schemas import User, Role
 
-USERS_SERVICE_URL = "http://users:8002"  
-DEVICES_SERVICE_URL = "http://devices:8003"  
+USERS_SERVICE_URL = os.getenv("USERS_URL", "http://users:8002")
+DEVICES_SERVICE_URL = os.getenv("DEVICES_URL", "http://devices:8003")
 
 def init_routes(app, SessionLocal, pwd, make_token):
 
@@ -64,11 +66,28 @@ def init_routes(app, SessionLocal, pwd, make_token):
 
     @app.delete("/auth/users/{user_id}")
     def delete_user(user_id: str):
-        """Delete user"""
+        """Delete user from auth DB and cleanup to users and devices services."""
         with SessionLocal() as db:
-            user = db.query(User).filter(User.id == user_id).first()
-            if not user:
+            u = db.query(User).filter(User.id == user_id).first()
+            if not u:
                 raise HTTPException(status_code=404, detail="User not found")
-            db.delete(user)
+            db.delete(u)
             db.commit()
-            return {"status": "deleted"}
+
+        def call_with_retries(method: str, url: str, **kwargs):
+            for i in range(3):
+                try:
+                    r = httpx.request(method, url, timeout=5.0, **kwargs)
+                    
+                    if r.status_code < 500:
+                        return r
+                except Exception:
+                    pass
+                time.sleep(0.5 * (2 ** i))
+            return None
+
+        # best effort
+        call_with_retries("DELETE", f"{USERS_SERVICE_URL}/users/sync/{user_id}")
+        call_with_retries("DELETE", f"{DEVICES_SERVICE_URL}/device-users/{user_id}")
+
+        return {"status": "deleted", "id": user_id}

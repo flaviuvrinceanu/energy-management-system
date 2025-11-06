@@ -133,7 +133,7 @@ def init_routes(app, SessionLocal):
                 device_user_id=None
             )
 
-    # Device Users endpoints
+    
     @app.get("/device-users")
     def get_device_users(x_user_role: Optional[str] = Header(None)):
         """Get all device users (admin only)"""
@@ -154,7 +154,7 @@ def init_routes(app, SessionLocal):
                 existing.role = payload.role
                 db.commit()
                 db.refresh(existing)
-                u = existing  # Assign to u
+                u = existing  
             else:
                 u = DeviceUser(id=payload.id, username=payload.username, role=payload.role)
                 db.add(u)
@@ -162,3 +162,14 @@ def init_routes(app, SessionLocal):
                 db.refresh(u)
         
         return {"id": str(u.id), "username": u.username, "role": u.role}
+
+    @app.delete("/device-users/{user_id}")
+    def delete_device_user(user_id: str):
+        """Internal: unassign all devices from user and remove device_user (called by auth on delete)."""
+        with SessionLocal() as db:
+    
+            db.query(Device).filter(Device.device_user_id == user_id).update({"device_user_id": None})
+           
+            db.query(DeviceUser).filter(DeviceUser.id == user_id).delete()
+            db.commit()
+        return {"status": "deleted"}

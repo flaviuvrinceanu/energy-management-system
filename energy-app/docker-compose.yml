@@ -35,7 +35,7 @@ services:
       context: .
       dockerfile: auth_service/Dockerfile
     ports:
-      - "8001:8001"  # ADD THIS
+      - "8001:8001"  
     environment:
       AUTH_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/energy_auth
       USERS_URL: http://users:8002
@@ -65,7 +65,7 @@ services:
       context: .
       dockerfile: user_service/Dockerfile
     ports:
-      - "8002:8002"  # ADD THIS
+      - "8002:8002"  
     environment:
       USERS_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/energy_users
       DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/energy_users
@@ -84,7 +84,7 @@ services:
       context: .
       dockerfile: device_service/Dockerfile
     ports:
-      - "8003:8003"  # ADD THIS
+      - "8003:8003"  
     environment:
       DEVICES_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/energy_devices
     depends_on: [db]
@@ -102,7 +102,7 @@ services:
       context: .
       dockerfile: gateway/Dockerfile
     ports:
-      - "8000:8000"  # ADD THIS
+      - "8000:8000"  
     environment:
       AUTH_URL: http://auth:8001
       USERS_URL: http://users:8002

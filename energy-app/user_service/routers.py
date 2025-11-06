@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, Header
-from typing import Literal, List, Optional
+from typing import Optional, List
 import httpx
 import os
-from .dto import UserIn, UserOut
+from .dto import *
 from .schemas import User, Role
 
 AUTH_SERVICE_URL = "http://auth:8001"
@@ -14,25 +14,18 @@ def require_admin(x_user_role: str | None = Header(default=None)):
 def init_routes(app, SessionLocal):
 
     @app.get("/users")
-    def get_users(x_user_role: Optional[str] = Header(None)) -> List[UserOut]:
-        """Get all users from the users service database (admin only)"""
+    def get_users(x_user_role: Optional[str] = Header(None)):
+        """Get all users from auth service"""
         if x_user_role != "admin":
             raise HTTPException(status_code=403, detail="Admin only")
-
-        with SessionLocal() as db:
-            rows = db.query(User).order_by(User.username.asc()).all()
-            # Handle role stored as Enum or string
-            def role_to_str(r):
-                return r.value if hasattr(r, "value") else r
-
-            return [
-                UserOut(
-                    id=str(u.id),
-                    username=u.username,
-                    role=role_to_str(u.role),
-                )
-                for u in rows
-            ]
+        
+        try:
+            response = httpx.get(f"{AUTH_SERVICE_URL}/auth/users", timeout=10.0)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            print(f"Error calling auth service: {e}")
+            raise HTTPException(status_code=503, detail=f"Auth service unavailable: {str(e)}")
 
     @app.post("/users")
     def create_user(payload: UserIn, x_user_role: Optional[str] = Header(None)):
@@ -40,7 +33,7 @@ def init_routes(app, SessionLocal):
         if x_user_role != "admin":
             raise HTTPException(status_code=403, detail="Admin only")
         
-        print(f"Creating user: {payload.username}, role: {payload.role}")  # Debug
+        print(f"Creating user: {payload.username}, role: {payload.role}") 
         
         try:
             response = httpx.post(
@@ -48,8 +41,8 @@ def init_routes(app, SessionLocal):
                 json={"username": payload.username, "password": payload.password, "role": payload.role},
                 timeout=10.0
             )
-            print(f"Auth response status: {response.status_code}")  # Debug
-            print(f"Auth response body: {response.text}")  # Debug
+            print(f"Auth response status: {response.status_code}")  
+            print(f"Auth response body: {response.text}")  
             response.raise_for_status()
             return response.json()
         except httpx.HTTPStatusError as e:
@@ -88,3 +81,11 @@ def init_routes(app, SessionLocal):
             raise HTTPException(status_code=e.response.status_code, detail=e.response.json().get("detail"))
         except Exception as e:
             raise HTTPException(status_code=503, detail=str(e))
+
+    @app.delete("/users/sync/{user_id}")
+    def sync_delete_user(user_id: str):
+        """Remove user from users DB (called by auth on delete)."""
+        with SessionLocal() as db:
+            db.query(User).filter(User.id == user_id).delete()
+            db.commit()
+        return {"status": "deleted"}
