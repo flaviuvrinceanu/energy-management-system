@@ -42,7 +42,15 @@ services:
       DEVICES_URL: http://devices:8003
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_MIN: ${JWT_EXPIRES_MIN:-120}
-    depends_on: [db]
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-guest}
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks: [net]
     labels:
       - traefik.enable=true
@@ -69,8 +77,14 @@ services:
     environment:
       USERS_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/energy_users
       DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/energy_users
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-guest}
     depends_on:
       db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     networks: [net]
     labels:
@@ -87,7 +101,15 @@ services:
       - "8003:8003"  
     environment:
       DEVICES_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/energy_devices
-    depends_on: [db]
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-guest}
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     networks: [net]
     labels:
       - traefik.enable=true
@@ -108,7 +130,8 @@ services:
       USERS_URL: http://users:8002
       DEVICES_URL: http://devices:8003
       JWT_SECRET: ${JWT_SECRET}
-    depends_on: [auth, users, devices]
+      MONITORING_URL: http://monitoring:8004
+    depends_on: [auth, users, devices, monitoring]
     networks: [net]
     labels:
       - traefik.enable=true
@@ -130,8 +153,52 @@ services:
       - gateway
     networks: [net]
 
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+    ports:
+      - "5672:5672"   # AMQP port (for applications to connect)
+      - "15672:15672" # Management UI (web interface)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks: [net]
+
+  monitoring:
+    build:
+      context: .
+      dockerfile: monitoring_service/Dockerfile   # FIX path
+    ports:
+      - "8004:8004"
+    environment:
+      MONITORING_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/energy_monitoring
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-guest}
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks: [net]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.monitoring.rule=PathPrefix(`/monitoring`)
+      - traefik.http.routers.monitoring.entrypoints=web
+      - traefik.http.middlewares.monitoring-stripprefix.stripPrefix.prefixes=/monitoring
+      - traefik.http.routers.monitoring.middlewares=monitoring-stripprefix
+      - traefik.http.services.monitoring.loadbalancer.server.port=8004
+
 volumes:
   dbdata:
+  rabbitmq_data:
 
 networks:
   net:

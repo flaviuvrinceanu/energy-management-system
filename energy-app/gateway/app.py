@@ -11,6 +11,7 @@ JWT_SECRET = os.getenv("JWT_SECRET", "secret-key")
 AUTH_URL = os.getenv("AUTH_URL", "http://auth:8001")
 USERS_URL = os.getenv("USERS_URL", "http://users:8002")
 DEVICES_URL = os.getenv("DEVICES_URL", "http://devices:8003")
+MONITORING_URL = os.getenv("MONITORING_URL", "http://monitoring:8004")
 
 app = FastAPI(title="API Gateway")
 
@@ -26,8 +27,10 @@ app.add_middleware(
 TARGETS = {
     "/api/auth": (AUTH_URL, "/api"),
     "/api/users": (USERS_URL, "/api"),
+    "/api/devices/mine": (DEVICES_URL, "/api"),
     "/api/devices": (DEVICES_URL, "/api"),
     "/api/device-users": (DEVICES_URL, "/api"),
+    "/api/monitoring": (MONITORING_URL, "/api"),  
 }
 
 def required_role(path: str, method: str):
@@ -37,12 +40,16 @@ def required_role(path: str, method: str):
     # Client
     if path == "/api/devices/mine" and method == "GET":
         return "client" 
+    if path.startswith("/api/monitoring/devices/") and "/day/" in path and method == "GET":
+        return "client" 
     # Admin
+    if path.startswith("/api/monitoring/devices") and method == "GET":
+       
+        if path.endswith("/devices"):
+            return "admin"
     if path.startswith("/api/users"):
         return "admin"
     if path.startswith("/api/devices"):
-        return "admin"
-    if path.startswith("/api/device-users"):
         return "admin"
     return None
 

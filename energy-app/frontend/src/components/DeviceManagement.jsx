@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getDevices, createDevice, deleteDevice, updateDevice, getUsers, assignDevice, createDeviceUser } from '../services/api';
+import { getDevices, createDevice, deleteDevice, updateDevice, getUsers, assignDevice } from '../services/api';
 
 function DeviceManagement() {
   const [devices, setDevices] = useState([]);
@@ -44,18 +44,9 @@ function DeviceManagement() {
         max_consumption: parseFloat(maxConsumption),
         device_user_id: selectedUser || null
       };
-      
-      if (selectedUser) {
-        const user = users.find(u => u.id === selectedUser);
-        if (user) {
-          try {
-            await createDeviceUser({ id: user.id, username: user.username, role: user.role });
-          } catch (err) {
-            
-          }
-        }
-      }
-      
+
+     
+
       await createDevice(payload);
       setName('');
       setMaxConsumption('');
@@ -100,10 +91,7 @@ function DeviceManagement() {
 
   const handleAssign = async (deviceId, userId) => {
     try {
-      const user = users.find(u => u.id === userId);
-      if (user) {
-        await createDeviceUser({ id: user.id, username: user.username, role: user.role });
-      }
+      
       await assignDevice(deviceId, userId);
       loadDevices();
     } catch (err) {

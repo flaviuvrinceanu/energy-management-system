@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getMyDevices } from '../services/api';
+import EnergyChart from './EnergyChart';
 
 function ClientDashboard() {
   const [devices, setDevices] = useState([]);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().slice(0,10));
+  const [activeDevice, setActiveDevice] = useState(null);
 
   useEffect(() => {
     loadDevices();
@@ -53,6 +56,23 @@ function ClientDashboard() {
         </tbody>
       </table>
       {devices.length === 0 && !error && <p style={{ marginTop: '20px' }}>No devices assigned to you.</p>}
+      <input
+        type="date"
+        value={selectedDate}
+        onChange={e => setSelectedDate(e.target.value)}
+        style={{ marginTop: '20px', padding: '6px' }}
+      />
+      {devices.length > 0 && (
+        <select
+          value={activeDevice || ''}
+          onChange={e => setActiveDevice(e.target.value)}
+          style={{ marginLeft: '10px', padding: '6px' }}
+        >
+          <option value="">Select device</option>
+          {devices.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+      )}
+      {activeDevice && <EnergyChart deviceId={activeDevice} date={selectedDate} />}
     </div>
   );
 }

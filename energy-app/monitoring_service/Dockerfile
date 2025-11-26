@@ -4,6 +4,6 @@ WORKDIR /app
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY shared /app/shared
-COPY user_service /app/user_service
-EXPOSE 8002
-CMD ["uvicorn", "user_service.main:app", "--host", "0.0.0.0", "--port", "8002"]
+COPY monitoring_service /app/monitoring_service
+EXPOSE 8004
+CMD ["uvicorn", "monitoring_service.main:app", "--host", "0.0.0.0", "--port", "8004"]

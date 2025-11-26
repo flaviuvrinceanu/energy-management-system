@@ -5,6 +5,9 @@ from fastapi import HTTPException
 from .dto import RegisterIn, LoginIn, TokenOut
 from .schemas import User, Role
 from pydantic import BaseModel
+import sys
+sys.path.append('/app')
+from shared.rabbitmq_utils import RabbitMQClient
 
 USERS_SERVICE_URL = os.getenv("USERS_URL", "http://users:8002")
 DEVICES_SERVICE_URL = os.getenv("DEVICES_URL", "http://devices:8003")
@@ -12,7 +15,24 @@ DEVICES_SERVICE_URL = os.getenv("DEVICES_URL", "http://devices:8003")
 class UpdateUserIn(BaseModel):
     username: str
 
+
+rabbitmq_client = RabbitMQClient()
+
 def init_routes(app, SessionLocal, pwd, make_token):
+
+    @app.on_event("startup")
+    async def startup_event():
+        """Initialize RabbitMQ connection and declare exchanges"""
+        try:
+            rabbitmq_client.connect()
+            rabbitmq_client.declare_exchange("sync_events", "fanout")
+        except Exception as e:
+            print(f"Failed to connect to RabbitMQ: {e}")
+
+    @app.on_event("shutdown")
+    async def shutdown_event():
+        """Close RabbitMQ connection"""
+        rabbitmq_client.close()
 
     @app.post("/auth/register")
     def register(payload: RegisterIn):
@@ -20,7 +40,6 @@ def init_routes(app, SessionLocal, pwd, make_token):
             if db.query(User).filter(User.username == payload.username).first():
                 raise HTTPException(status_code=400, detail="Username already exists")
             
-           
             password_bytes = payload.password.encode('utf-8')[:72]
             password_str = password_bytes.decode('utf-8', errors='ignore')
             
@@ -33,22 +52,18 @@ def init_routes(app, SessionLocal, pwd, make_token):
             db.commit()
             db.refresh(u)
             
-            # Sync to users service
+           
             try:
-                httpx.post(f"{USERS_SERVICE_URL}/users/sync", 
-                          json={"id": str(u.id), "username": u.username, "role": u.role.value},
-                          timeout=5.0)
+                event = {
+                    "event_type": "USER_CREATED",
+                    "user_id": str(u.id),
+                    "username": u.username,
+                    "role": u.role.value
+                }
+                rabbitmq_client.publish(None, event, exchange="sync_events")
+                print(f"Published USER_CREATED event for user {u.id}")
             except Exception as e:
-                print(f"Failed to sync to users service: {e}")
-            
-            # Sync to devices service 
-            try:
-                httpx.post(f"{DEVICES_SERVICE_URL}/device-users", 
-                          json={"id": str(u.id), "username": u.username, "role": u.role.value},
-                          headers={"X-User-Role": "admin"},
-                          timeout=5.0)
-            except Exception as e:
-                print(f"Failed to sync to devices service: {e}")
+                print(f"Failed to publish USER_CREATED event: {e}")
             
             return {"id": str(u.id), "username": u.username, "role": u.role.value}
 
@@ -70,55 +85,56 @@ def init_routes(app, SessionLocal, pwd, make_token):
 
     @app.delete("/auth/users/{user_id}")
     def delete_user(user_id: str):
-        """Delete user from auth DB and cleanup to users and devices services."""
+        """Delete user from auth DB and publish USER_DELETED event."""
         with SessionLocal() as db:
             u = db.query(User).filter(User.id == user_id).first()
             if not u:
                 raise HTTPException(status_code=404, detail="User not found")
+            
+            user_data = {"id": str(u.id), "username": u.username, "role": u.role.value}
             db.delete(u)
             db.commit()
 
-        def call_with_retries(method: str, url: str, **kwargs):
-            for i in range(3):
-                try:
-                    r = httpx.request(method, url, timeout=5.0, **kwargs)
-                    
-                    if r.status_code < 500:
-                        return r
-                except Exception:
-                    pass
-                time.sleep(0.5 * (2 ** i))
-            return None
-
-        # best effort
-        call_with_retries("DELETE", f"{USERS_SERVICE_URL}/users/sync/{user_id}")
-        call_with_retries("DELETE", f"{DEVICES_SERVICE_URL}/device-users/{user_id}")
+       
+        try:
+            event = {
+                "event_type": "USER_DELETED",
+                "user_id": user_id
+            }
+            rabbitmq_client.publish(None, event, exchange="sync_events")
+            print(f"Published USER_DELETED event for user {user_id}")
+        except Exception as e:
+            print(f"Failed to publish USER_DELETED event: {e}")
 
         return {"status": "deleted", "id": user_id}
 
     @app.put("/auth/users/{user_id}")
     def update_user(user_id: str, payload: UpdateUserIn):
-        """Update username in Auth and sync copies."""
+        """Update username in Auth and publish USER_UPDATED event."""
         with SessionLocal() as db:
             u = db.query(User).filter(User.id == user_id).first()
             if not u:
                 raise HTTPException(status_code=404, detail="User not found")
-            # unique username
+            
             exists = db.query(User).filter(User.username == payload.username, User.id != user_id).first()
             if exists:
                 raise HTTPException(status_code=409, detail="Username already exists")
+            
             u.username = payload.username
             db.commit()
             db.refresh(u)
 
-        body = {"id": str(u.id), "username": u.username, "role": u.role.value if hasattr(u.role, "value") else u.role}
+        
         try:
-            httpx.post(f"{USERS_SERVICE_URL}/users/sync", json=body, timeout=5.0)
-        except Exception:
-            pass
-        try:
-            httpx.post(f"{DEVICES_SERVICE_URL}/device-users", json=body, timeout=5.0)
-        except Exception:
-            pass
+            event = {
+                "event_type": "USER_UPDATED",
+                "user_id": str(u.id),
+                "username": u.username,
+                "role": u.role.value if hasattr(u.role, "value") else u.role
+            }
+            rabbitmq_client.publish(None, event, exchange="sync_events")
+            print(f"Published USER_UPDATED event for user {u.id}")
+        except Exception as e:
+            print(f"Failed to publish USER_UPDATED event: {e}")
 
-        return body
+        return {"id": str(u.id), "username": u.username, "role": u.role.value if hasattr(u.role, "value") else u.role}

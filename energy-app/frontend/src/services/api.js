@@ -39,7 +39,8 @@ export const updateDevice = (deviceId, data) => api.put(`/devices/${deviceId}`, 
 // My Devices
 export const getMyDevices = () => api.get('/devices/mine');
 
-// Device Users
-export const createDeviceUser = (data) => api.post('/device-users', data);
+// Monitoring
+export const getDailyConsumption = (deviceId, date) =>
+  api.get(`/monitoring/devices/${deviceId}/day/${date}`);
 
 export default api;
