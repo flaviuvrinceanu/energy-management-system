@@ -2,19 +2,49 @@
 
 A microservices based energy management system built with FastAPI, React, and Python.
 
+
 ## System Architecture
 
 ### Microservices
 - **Auth Service** (Port 8001): User authentication, JWT tokens
 - **Users Service** (Port 8002): Admin user management interface, CRUD proxies to auth
 - **Devices Service** (Port 8003): Device CRUD and user-device assignments
+- **Monitoring Service** (Port 8004): Stores and aggregates device measurements, computes hourly consumption
 - **Gateway** (Port 8000): API Gateway with JWT validation and request routing
 - **Frontend** (Port 3000): React based admin and client dashboards
 
 ### Infrastructure
+- **RabbitMQ**: Event bus for service synchronization (fanout exchange for user/device events)
 - **Traefik**: Reverse proxy (Port 80, 8080)
 - **PostgreSQL**: Database with separate DBs per service
 - **Docker Compose**: Containerization
+## Event Driven Synchronization
+
+Services communicate user and device changes using RabbitMQ with a fanout exchange . Each service has its own queue bound to this exchange, ensuring all receive every event . This keeps user/device data in sync across all microservices.
+
+
+- User registration, update, and device assignment events are broadcast to all services.
+- Each service consumes from its own queue, so no events are missed.
+
+
+## Device Simulator
+
+The `device_simulator` sends periodic device readings to RabbitMQ. This simulates real device data for testing and development.
+
+**Usage:**
+
+1. Open a terminal in the `device_simulator` directory.
+2. Run:
+	```powershell
+	python simulator.py --device-id <DEVICE_ID> [--interval <SECONDS>] [--rabbitmq-host <HOST>] [--rabbitmq-port <PORT>] [--rabbitmq-user <USER>] [--rabbitmq-pass <PASS>]
+	```
+	Example:
+	```powershell
+	python simulator.py --device-id dev123 --interval 600
+	```
+3. The simulator will send readings to the `device_data_queue` in RabbitMQ at the specified interval.
+
+
 
 ## Features
 
@@ -64,17 +94,20 @@ A microservices based energy management system built with FastAPI, React, and Py
 - Docker Desktop
 - Git
 
-## Installation & Setup 
+
+## Installation & Setup
 
 1. **If running locally without Docker**
-
-pip install -r requirements.txt
-cd frontend
-npm install
+	```powershell
+	pip install -r requirements.txt
+	cd frontend
+	npm install
+	```
 
 2. **If using Docker**
-
-docker compose up -d --build
+	```powershell
+	docker compose up -d --build
+	```
 
 
 
@@ -113,6 +146,7 @@ docker compose up -d --build
 - Shows: Device Name, Max Consumption
 - Read-only view (no edit/delete options)
 - Refreshes automatically
+- Displays chart of consumption over time for each device
 
 ### Logout
 - Click "Logout" button (top-right) from any dashboard
