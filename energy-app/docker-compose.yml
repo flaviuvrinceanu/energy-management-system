@@ -159,8 +159,8 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
     ports:
-      - "5672:5672"   # AMQP port (for applications to connect)
-      - "15672:15672" # Management UI (web interface)
+      - "5672:5672"   
+      - "15672:15672" 
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
@@ -173,7 +173,7 @@ services:
   monitoring:
     build:
       context: .
-      dockerfile: monitoring_service/Dockerfile   # FIX path
+      dockerfile: monitoring_service/Dockerfile  
     ports:
       - "8004:8004"
     environment:
