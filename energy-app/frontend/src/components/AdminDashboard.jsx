@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import UserManagement from './UserManagement';
 import DeviceManagement from './DeviceManagement';
+import AdminSupportInbox from './AdminSupportInbox';
 
 function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('users');
@@ -46,8 +47,21 @@ function AdminDashboard() {
         >
           Manage Devices
         </button>
+        <button
+          onClick={() => setActiveTab('support')}
+          style={{
+            marginLeft: '10px',
+            padding: '10px 20px',
+            background: activeTab === 'support' ? '#007bff' : '#6c757d',
+            color: 'white',
+            border: 'none',
+            borderRadius: '5px'
+          }}
+        >
+          Support Inbox
+        </button>
       </div>
-      {activeTab === 'users' ? <UserManagement /> : <DeviceManagement />}
+      {activeTab === 'users' ? <UserManagement /> : activeTab === 'devices' ? <DeviceManagement /> : <AdminSupportInbox />}
     </div>
   );
 }

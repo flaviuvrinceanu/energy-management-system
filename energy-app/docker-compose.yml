@@ -131,7 +131,9 @@ services:
       DEVICES_URL: http://devices:8003
       JWT_SECRET: ${JWT_SECRET}
       MONITORING_URL: http://monitoring:8004
-    depends_on: [auth, users, devices, monitoring]
+      SUPPORT_URL: http://support:8005
+      WEBSOCKET_URL: http://websocket:8006
+    depends_on: [auth, users, devices, monitoring, support, websocket]
     networks: [net]
     labels:
       - traefik.enable=true
@@ -170,6 +172,22 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks: [net]
 
+  load_balancer:
+    build:
+      context: .
+      dockerfile: load_balancer_service/Dockerfile
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-guest}
+      NUM_REPLICAS: 3
+      LOAD_STRATEGY: ${LOAD_STRATEGY:-round-robin} 
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks: [net]
+
   monitoring:
     build:
       context: .
@@ -182,11 +200,14 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: ${RABBITMQ_USER:-guest}
       RABBITMQ_PASS: ${RABBITMQ_PASS:-guest}
+      INGEST_QUEUE: ingest_queue_1
     depends_on:
       db:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      load_balancer:
+        condition: service_started
     networks: [net]
     labels:
       - traefik.enable=true
@@ -195,6 +216,96 @@ services:
       - traefik.http.middlewares.monitoring-stripprefix.stripPrefix.prefixes=/monitoring
       - traefik.http.routers.monitoring.middlewares=monitoring-stripprefix
       - traefik.http.services.monitoring.loadbalancer.server.port=8004
+
+  monitoring2:
+    build:
+      context: .
+      dockerfile: monitoring_service/Dockerfile
+    environment:
+      MONITORING_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/energy_monitoring
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-guest}
+      INGEST_QUEUE: ingest_queue_2
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      load_balancer:
+        condition: service_started
+    networks: [net]
+
+  monitoring3:
+    build:
+      context: .
+      dockerfile: monitoring_service/Dockerfile
+    environment:
+      MONITORING_DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/energy_monitoring
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-guest}
+      INGEST_QUEUE: ingest_queue_3
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      load_balancer:
+        condition: service_started
+    networks: [net]
+
+  support:
+    build:
+      context: .
+      dockerfile: customer_support_service/Dockerfile
+    ports:
+      - "8005:8005"
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-guest}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-flash}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks: [net]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.support.rule=PathPrefix(`/support`)
+      - traefik.http.routers.support.entrypoints=web
+      - traefik.http.middlewares.support-stripprefix.stripPrefix.prefixes=/support
+      - traefik.http.routers.support.middlewares=support-stripprefix
+      - traefik.http.services.support.loadbalancer.server.port=8005
+
+  websocket:
+    build:
+      context: .
+      dockerfile: websocket_service/Dockerfile
+    ports:
+      - "8006:8006"
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_PASS: ${RABBITMQ_PASS:-guest}
+      JWT_SECRET: ${JWT_SECRET}
+      SUPPORT_SERVICE_URL: http://support:8005
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      support:
+        condition: service_started
+    networks: [net]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.websocket.rule=PathPrefix(`/ws`)
+      - traefik.http.routers.websocket.entrypoints=web
+      - traefik.http.services.websocket.loadbalancer.server.port=8006
 
 volumes:
   dbdata:

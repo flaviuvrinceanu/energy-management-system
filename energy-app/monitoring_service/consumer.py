@@ -4,6 +4,7 @@ from shared.rabbitmq_utils import RabbitMQClient
 from .schemas import MonitoringDevice, HourlyMeasurement
 from datetime import datetime
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +13,8 @@ class MonitoringConsumer:
         self.SessionLocal = SessionLocal
         self.rabbitmq_sync = RabbitMQClient()
         self.rabbitmq_data = RabbitMQClient()
+        self.rabbitmq_notif = RabbitMQClient()
+        self.ingest_queue = os.getenv("INGEST_QUEUE", "device_data_queue")
     
     def handle_sync_message(self, message: dict):
         """Handle device lifecycle events"""
@@ -149,9 +152,47 @@ class MonitoringConsumer:
                 
                 db.commit()
                 logger.info(f"Updated measurement for device {device_id} at {hour_timestamp}: {measurement.total_kwh} kWh")
+                
+                
+                if measurement.total_kwh > device.max_consumption:
+                    self._publish_overconsumption_alert(
+                        device_id=device_id,
+                        user_id=device.user_id,
+                        hour_timestamp=hour_timestamp,
+                        total_kwh=measurement.total_kwh,
+                        max_consumption=device.max_consumption
+                    )
         
         except Exception as e:
             logger.error(f"Error processing device data: {e}")
+    
+    def _publish_overconsumption_alert(self, device_id: str, user_id: str, 
+                                      hour_timestamp: datetime, total_kwh: float, 
+                                      max_consumption: float):
+        """Publish overconsumption notification to RabbitMQ"""
+        try:
+            message = {
+                "type": "overconsumption",
+                "device_id": device_id,
+                "user_id": user_id,
+                "hour_timestamp": hour_timestamp.isoformat(),
+                "total_kwh": total_kwh,
+                "max_consumption": max_consumption
+            }
+            
+           
+            if not self.rabbitmq_notif.channel:
+                self.rabbitmq_notif.connect()
+                self.rabbitmq_notif.declare_exchange("overconsumption_notifications", "fanout")
+            
+            self.rabbitmq_notif.publish(
+                queue_name="",
+                message=message,
+                exchange="overconsumption_notifications"
+            )
+            logger.info(f"Published overconsumption alert for device {device_id}, user {user_id}")
+        except Exception as e:
+            logger.error(f"Error publishing overconsumption alert: {e}")
     
     def start_sync_consumer(self):
         """Start consuming sync events"""
@@ -165,6 +206,6 @@ class MonitoringConsumer:
     def start_data_consumer(self):
         """Start consuming device data"""
         self.rabbitmq_data.connect()
-        self.rabbitmq_data.declare_queue("device_data_queue")
-        logger.info("Monitoring data consumer started")
-        self.rabbitmq_data.consume("device_data_queue", self.handle_device_data)
+        self.rabbitmq_data.declare_queue(self.ingest_queue)
+        logger.info(f"Monitoring data consumer started on queue: {self.ingest_queue}")
+        self.rabbitmq_data.consume(self.ingest_queue, self.handle_device_data)

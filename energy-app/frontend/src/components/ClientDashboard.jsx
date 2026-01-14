@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getMyDevices } from '../services/api';
 import EnergyChart from './EnergyChart';
+import ChatWidget from './ChatWidget';
 
 function ClientDashboard() {
   const [devices, setDevices] = useState([]);
@@ -73,6 +74,7 @@ function ClientDashboard() {
         </select>
       )}
       {activeDevice && <EnergyChart deviceId={activeDevice} date={selectedDate} />}
+      <ChatWidget />
     </div>
   );
 }

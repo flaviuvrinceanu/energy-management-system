@@ -12,6 +12,7 @@ AUTH_URL = os.getenv("AUTH_URL", "http://auth:8001")
 USERS_URL = os.getenv("USERS_URL", "http://users:8002")
 DEVICES_URL = os.getenv("DEVICES_URL", "http://devices:8003")
 MONITORING_URL = os.getenv("MONITORING_URL", "http://monitoring:8004")
+SUPPORT_URL = os.getenv("SUPPORT_URL", "http://support:8005")
 
 app = FastAPI(title="API Gateway")
 
@@ -30,13 +31,17 @@ TARGETS = {
     "/api/devices/mine": (DEVICES_URL, "/api"),
     "/api/devices": (DEVICES_URL, "/api"),
     "/api/device-users": (DEVICES_URL, "/api"),
-    "/api/monitoring": (MONITORING_URL, "/api"),  
+    "/api/monitoring": (MONITORING_URL, "/api"),
+    "/api/support": (SUPPORT_URL, "/api"),
 }
 
 def required_role(path: str, method: str):
     # Public
     if path.startswith("/api/auth"):
         return None
+    
+    if path.startswith("/api/support"):
+        return "client"  
     # Client
     if path == "/api/devices/mine" and method == "GET":
         return "client" 

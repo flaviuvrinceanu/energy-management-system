@@ -5,10 +5,13 @@ import Register from './components/Register';
 import AdminDashboard from './components/AdminDashboard';
 import ClientDashboard from './components/ClientDashboard';
 import PrivateRoute from './components/PrivateRoute';
+import NotificationWidget from './components/NotificationWidget';
 
 function App() {
   return (
     <Router>
+      {}
+      <NotificationWidget />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
