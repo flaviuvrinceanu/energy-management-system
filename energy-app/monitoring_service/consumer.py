@@ -155,7 +155,7 @@ class MonitoringConsumer:
                 
                 
                 if measurement.total_kwh > device.max_consumption:
-                    self._publish_overconsumption_alert(
+                    self.publish_overconsumption_alert(
                         device_id=device_id,
                         user_id=device.user_id,
                         hour_timestamp=hour_timestamp,
@@ -166,7 +166,7 @@ class MonitoringConsumer:
         except Exception as e:
             logger.error(f"Error processing device data: {e}")
     
-    def _publish_overconsumption_alert(self, device_id: str, user_id: str, 
+    def publish_overconsumption_alert(self, device_id: str, user_id: str, 
                                       hour_timestamp: datetime, total_kwh: float, 
                                       max_consumption: float):
         """Publish overconsumption notification to RabbitMQ"""

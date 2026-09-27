@@ -1,93 +1,290 @@
-# DS2025_30443_Vrinceanu_Flaviu_3
+# Energy Management System
+
+A microservices based energy management system built with FastAPI, React, and Python.
+
+
+## System Architecture
+
+### Microservices
+- **Auth Service** (Port 8001): User authentication, JWT tokens
+- **Users Service** (Port 8002): Admin user management interface, CRUD proxies to auth
+- **Devices Service** (Port 8003): Device CRUD and user-device assignments
+- **Monitoring Service** (Port 8004): Stores and aggregates device measurements, computes hourly consumption
+- **Customer Support Service** (Port 8005): Rule-based chatbot with 10+ rules + Gemini AI fallback; forwards to admin only on explicit request
+- **WebSocket Service** (Port 8006): Real-time notifications (overconsumption alerts) and chat messaging
+- **Load Balancer Service**: Distributes device data messages to monitoring replicas (round-robin or consistent hashing)
+- **Gateway** (Port 8000): API Gateway with JWT validation and request routing
+- **Frontend** (Port 3000): React based admin and client dashboards
+
+### Infrastructure
+- **RabbitMQ**: Event bus for service synchronization (fanout exchange for user/device events)
+- **Traefik**: Reverse proxy (Port 80, 8080)
+- **PostgreSQL**: Database with separate DBs per service
+- **Docker Compose**: Local development containerization
+- **Docker Swarm**: Production deployment with load balancing
+
+## Assignment 3: WebSockets and Load Balancing
+
+### New Features Implemented
+
+#### 1. Real-Time Overconsumption Notifications
+- Monitoring service detects when device consumption exceeds max_consumption threshold
+- Publishes alerts to RabbitMQ fanout exchange `overconsumption_notifications`
+- WebSocket service consumes notifications and broadcasts to affected users via WebSocket
+
+#### 2. Customer Support Chat System
+- **Rule-based Chatbot**: 10+ rules for common questions (device management, energy usage, billing, etc.)
+- **AI-Driven Support (Gemini)**: Unmatched messages answered via Gemini API
+- **Admin Escalation**: Only when user explicitly requests admin/support (rule match)
+- **WebSocket Integration**: Real-time chat between clients and admins
+
+#### 3. Load Balancing for Monitoring Service
+- **Load Balancer Service**: Single consumer on `device_data_queue`
+- Distributes messages to per-replica ingest queues (`ingest_queue_1`, `ingest_queue_2`, `ingest_queue_3`)
+- Supports two strategies:
+  - **Round-robin**: Balanced distribution across replicas
+  - **Consistent-hash**: Device-based routing for session affinity
+- Monitoring service reads from `INGEST_QUEUE` env var (enables per-replica queues in swarm)
+
+### WebSocket Endpoints
+
+#### `/ws/notifications?token=<JWT>`
+- Authenticate with JWT token
+- Receive real-time overconsumption alerts for user's devices
+- Keep-alive with ping/pong
+
+#### `/ws/chat?token=<JWT>`
+- Two-way communication for customer support
+- Clients send messages → chatbot responds or forwards to admin
+- Admins receive user messages and can reply in real-time
+
+## Event Driven Synchronization
+
+Services communicate user and device changes using RabbitMQ with a fanout exchange. Each service has its own queue bound to this exchange, ensuring all receive every event. This keeps user/device data in sync across all microservices.
+
+- User registration, update, and device assignment events are broadcast to all services.
+- Each service consumes from its own queue, so no events are missed.
+
+
+## Device Simulator
+
+The `device_simulator` sends periodic device readings to RabbitMQ. This simulates real device data for testing and development.
+
+**Usage:**
+
+1. Open a terminal in the `device_simulator` directory.
+2. Run:
+	```powershell
+	python simulator.py --device-id <DEVICE_ID> [--interval <SECONDS>] [--rabbitmq-host <HOST>] [--rabbitmq-port <PORT>] [--rabbitmq-user <USER>] [--rabbitmq-pass <PASS>]
+	```
+	Example:
+	```powershell
+	python simulator.py --device-id dev123 --interval 600
+	```
+3. The simulator will send readings to the `device_data_queue` in RabbitMQ at the specified interval.
 
 
 
-## Getting started
+## Features
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+### Authentication & Authorization
+- User registration and login
+- JWT-based authentication
+- Role-based access control (Admin/Client)
+- Password hashing with bcrypt
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+### User Management (Admin)
+- Create users with roles
+- Update usernames
+- Delete users
+- View all users
 
-## Add your files
+### Device Management (Admin)
+- CRUD operations on devices
+- Update device name and max consumption
+- Assign/unassign devices to users
+- View all devices with assignments
 
-* [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+### Client Dashboard
+- View assigned devices
+- See device details (name, max consumption)
+- Real-time overconsumption alerts via WebSocket
+- Customer support chat
+
+### Customer Support
+- 10+ rule-based responses for common questions
+- Automatic escalation to admin for complex queries
+- Real-time chat via WebSocket
+
+## Technology Stack
+
+**Backend:**
+- FastAPI (Python)
+- SQLAlchemy ORM
+- PostgreSQL
+- JWT authentication
+- Passlib + bcrypt
+- WebSockets
+- RabbitMQ (pika)
+
+**Frontend:**
+- React 
+- Axios
+
+**Infrastructure:**
+- Docker
+- Traefik reverse proxy
+
+
+## Prerequisites
+
+- Docker Desktop
+- Git
+
+
+## Installation & Setup
+
+### Local Development with Docker Compose
+
+1. **Clone the repository**
+	```powershell
+	git clone <repository-url>
+	cd energy-app
+	```
+
+2. **Create .env file** with required environment variables:
+	```
+	POSTGRES_PASSWORD=yourpassword
+	JWT_SECRET=your-secret-key
+	JWT_EXPIRES_MIN=120
+	RABBITMQ_USER=guest
+	RABBITMQ_PASS=guest
+	```
+
+3. **Build and start all services**:
+	```powershell
+	docker-compose up --build
+	```
+
+4. **Access the application**:
+	- Frontend: http://localhost:3000
+	- API Gateway: http://localhost:8000
+	- Traefik Dashboard: http://localhost:8080
+	- RabbitMQ Management: http://localhost:15672
+
+
+
+
+
+### Load Balancing Configuration
+
+The load balancer distributes device data messages across monitoring replicas:
+
+- **Strategy**: Set via `LOAD_STRATEGY` environment variable
+  - `round-robin` (default): Evenly distributes messages
+  - `consistent-hash`: Routes same device_id to same replica
+  
+- **Replica Count**: Set via `NUM_REPLICAS` environment variable (default: 3)
+
+- **Queue Naming**: Monitoring replicas consume from `ingest_queue_1`, `ingest_queue_2`, etc.
+
+### Testing the System
+
+1. **Register an admin user** via frontend at http://localhost:3000
+
+2. **Create devices** via admin dashboard
+
+3. **Run device simulator**:
+	```powershell
+	cd device_simulator
+	pip install -r requirements.txt
+	python simulator.py --device-id <device-id> --interval 600
+	```
+
+4. **Test overconsumption alerts**:
+	- Set a low max_consumption on a device
+	- Run simulator to generate data exceeding the limit
+	- Check WebSocket notifications endpoint
+
+5. **Test customer support**:
+	- Connect to `/ws/chat` endpoint
+	- Send test messages matching chatbot rules
+	- Send unmatched messages to trigger admin forwarding
+
+### Monitoring and Debugging
+
+**RabbitMQ Queues:**
+- `device_data_queue`: Device simulator publishes here
+- `ingest_queue_1`, `ingest_queue_2`, `ingest_queue_3`: Per-replica monitoring queues
+- `overconsumption_notifications`: Fanout exchange for alerts
+- `admin_chat_queue`: Unhandled support messages
+- `sync_events`: Device/user synchronization
+
+
+
+**Service Logs:**
+```powershell
+
+docker-compose logs -f monitoring
+docker-compose logs -f websocket
+docker-compose logs -f support
+docker-compose logs -f load_balancer
+
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/ds2025_30443_vrinceanu_flaviu/ds2025_30443_vrinceanu_flaviu_3.git
-git branch -M main
-git push -uf origin main
-```
 
-## Integrate with your tools
+1. **If running locally without Docker**
+	```powershell
+	pip install -r requirements.txt
+	cd frontend
+	npm install
+	```
 
-* [Set up project integrations](https://gitlab.com/ds2025_30443_vrinceanu_flaviu/ds2025_30443_vrinceanu_flaviu_3/-/settings/integrations)
+2. **If using Docker**
+	```powershell
+	docker compose up -d --build
+	```
 
-## Collaborate with your team
 
-* [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
 
-## Test and Deploy
+## Navigating the Application
 
-Use the built-in continuous integration in GitLab.
+### Login & Registration
+1. **Access App**: Open http://localhost:3000
+2. **New User**: Click "Register" → Enter username, password, select role → Submit
+3. **Existing User**: Enter credentials → Click "Login"
+4. **Auto-Redirect**: Dashboard opens based on your role (Admin/Client)
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+### Admin Dashboard
 
-***
+**Main Navigation Tabs:**
+- **User Management**: Manage system users
+- **Device Management**: Manage devices and assignments
 
-# Editing this README
+**User Management Tab:**
+- View all users in a table (Username, Role)
+- **Create**: Fill form above table → Click "Create User"
+- **Edit**: Click "Edit" button → Modify username → "Save"
+- **Delete**: Click "Delete" button → Confirm
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+**Device Management Tab:**
+- View all devices (Name, Max Consumption, Assigned User)
+- **Create**: Fill form above table → Click "Create Device"
+- **Edit**: Click "Edit" → Modify fields → "Save"
+- **Assign**: Select user from dropdown → Auto-assigns
+- **Unassign**: Click "Unassign" for assigned devices
+- **Delete**: Click "Delete" → Confirm
 
-## Suggestions for a good README
+### Client Dashboard
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+**My Devices View:**
+- Displays table of your assigned devices
+- Shows: Device Name, Max Consumption
+- Read-only view (no edit/delete options)
+- Refreshes automatically
+- Displays chart of consumption over time for each device
 
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+### Logout
+- Click "Logout" button (top-right) from any dashboard
+- Redirects to login page
+- Clears authentication token
